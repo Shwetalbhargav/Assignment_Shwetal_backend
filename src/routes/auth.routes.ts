@@ -1,13 +1,22 @@
 import { Router } from "express";
-import { AuthController } from "../controllers/auth.controller";
-import { validate } from "../middlewares/validate";
-import { LoginDto, RegisterDto } from "../dtos/auth.dto";
+import { requireAuth } from "../middlewares/requireAuth";
+import {
+  register,
+  login,
+  refresh,
+  logout,
+  listSessions,
+  revokeSession,
+} from "../controllers/auth.controller"; // adjust path
 
-const r = Router();
-const c = new AuthController();
+const router = Router();
 
-r.post("/register", validate(RegisterDto), c.register);
-r.post("/login", validate(LoginDto), c.login);
-r.post("/logout", c.logout);
+router.post("/register", register);
+router.post("/login", login);
+router.post("/refresh", refresh);
+router.post("/logout", logout);
 
-export default r;
+router.get("/sessions", requireAuth, listSessions);
+router.post("/sessions/:id/revoke", requireAuth, revokeSession);
+
+export default router;

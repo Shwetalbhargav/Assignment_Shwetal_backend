@@ -1,6 +1,5 @@
 generator client {
   provider = "prisma-client-js"
-  
 }
 
 datasource db {
@@ -9,22 +8,26 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(auto()) @map("_id") @db.ObjectId
-  name         String
-  email        String   @unique
-  mobileNumber String?
-  passwordHash String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  createdTasks  Task[] @relation("createdTasks")
-  assignedTasks Task[] @relation("assignedTasks")
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  name          String
+  email         String    @unique
+  mobileNumber  String?
+  passwordHash  String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+  createdTasks  Task[]    @relation("createdTasks")
+  assignedTasks Task[]    @relation("assignedTasks")
 }
 
 model Task {
-  id           String  @id @default(auto()) @map("_id") @db.ObjectId
-  title        String
-  description  String?
+  id          String       @id @default(auto()) @map("_id") @db.ObjectId
+  title       String
+  description String?
+  dueDate     DateTime
+  priority    TaskPriority @default(MEDIUM)
+  status      TaskStatus   @default(TODO)
+
   creatorId    String  @db.ObjectId
   assignedToId String? @db.ObjectId
 
@@ -47,4 +50,20 @@ enum TaskStatus {
   IN_PROGRESS
   REVIEW
   COMPLETED
+}
+
+model Session {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  userId String @db.ObjectId
+  user   User   @relation(fields: [userId], references: [id])
+
+  refreshHash String // hash of refresh token (never store raw)
+  userAgent   String?
+  ip          String?
+  createdAt   DateTime  @default(now())
+  lastUsedAt  DateTime  @default(now())
+  revokedAt   DateTime?
+  expiresAt   DateTime
+
+  @@index([userId])
 }
