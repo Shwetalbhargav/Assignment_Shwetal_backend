@@ -1,41 +1,35 @@
 import { Request, Response, NextFunction } from "express";
 import { TasksService } from "../services/tasks.service";
-import {
-  createTaskSchema,
-  updateTaskSchema,
-  assignTaskSchema,
-  objectId,
-  TaskStatusSchema,
-  TaskPrioritySchema,
-} from "../middlewares/tasks.validators";
 
-const service = new TasksService();
+const tasksService = new TasksService();
 
-function getUserId(req: Request) {
-  const id = (req as any).user?.id as string | undefined;
-  if (!id) throw Object.assign(new Error("Unauthorized"), { status: 401 });
-  return id;
+function requireString(value: unknown, name: string): string {
+  if (typeof value !== "string" || !value.trim()) {
+    throw Object.assign(new Error(`${name} is required`), { status: 400 });
+  }
+  return value.trim();
+}
+
+/**
+ * Avoids TS error: "Property 'user' does not exist on type Request"
+ * Works with your requireAuth if it sets req.user, and also supports x-user-id for testing.
+ */
+function getCurrentUserId(req: Request): string {
+  const anyReq = req as any;
+  const fromUser = anyReq?.user?.id;
+  if (typeof fromUser === "string" && fromUser.trim()) return fromUser.trim();
+
+  const fromHeader = req.header("x-user-id");
+  if (typeof fromHeader === "string" && fromHeader.trim()) return fromHeader.trim();
+
+  throw Object.assign(new Error("Unauthorized"), { status: 401 });
 }
 
 export async function createTask(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = getUserId(req);
-    const body = createTaskSchema.parse(req.body);
-
-    // ✅ Normalize: never pass undefined explicitly for optional props
-    const input = {
-      title: body.title,
-      dueDate: body.dueDate,
-      description: body.description ?? null,         // undefined -> null
-      assignedToId: body.assignedToId ?? null,       // undefined -> null
-      ...(body.priority !== undefined ? { priority: body.priority } : {}),
-      ...(body.status !== undefined ? { status: body.status } : {}),
-    };
-
-    const task = await service.createTask(userId, input);
-
-    req.app.get("io")?.emit("task:created", task);
-    res.status(201).json(task);
+    const currentUserId = getCurrentUserId(req);
+    const created = await tasksService.createTask(req.body, currentUserId);
+    res.status(201).json(created);
   } catch (err) {
     next(err);
   }
@@ -43,54 +37,17 @@ export async function createTask(req: Request, res: Response, next: NextFunction
 
 export async function listTasks(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = getUserId(req);
-
-    const status =
-      typeof req.query.status === "string" ? TaskStatusSchema.parse(req.query.status) : undefined;
-
-    const priority =
-      typeof req.query.priority === "string" ? TaskPrioritySchema.parse(req.query.priority) : undefined;
-
-    const assignedToId =
-      typeof req.query.assignedToId === "string" ? objectId.parse(req.query.assignedToId) : undefined;
-
-    const creatorId =
-      typeof req.query.creatorId === "string" ? objectId.parse(req.query.creatorId) : undefined;
-
-    const q = typeof req.query.q === "string" ? req.query.q : undefined;
-
-    const page =
-      typeof req.query.page === "string" && req.query.page.trim() !== ""
-        ? Number(req.query.page)
-        : undefined;
-
-    const limit =
-      typeof req.query.limit === "string" && req.query.limit.trim() !== ""
-        ? Number(req.query.limit)
-        : undefined;
-
-    // ✅ Only include keys when they exist (prevents passing undefined explicitly)
-    const result = await service.listTasks(userId, {
-      ...(status !== undefined ? { status } : {}),
-      ...(priority !== undefined ? { priority } : {}),
-      ...(assignedToId !== undefined ? { assignedToId } : {}),
-      ...(creatorId !== undefined ? { creatorId } : {}),
-      ...(q !== undefined ? { q } : {}),
-      ...(page !== undefined ? { page } : {}),
-      ...(limit !== undefined ? { limit } : {}),
-    });
-
-    res.json(result);
+    const tasks = await tasksService.listTasks();
+    res.json(tasks);
   } catch (err) {
     next(err);
   }
 }
 
-export async function getTaskById(req: Request, res: Response, next: NextFunction) {
+export async function getTask(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = getUserId(req);
-    const id = objectId.parse(req.params.id);
-    const task = await service.getById(userId, id);
+    const taskId = requireString(req.params.taskId, "taskId");
+    const task = await tasksService.getTaskById(taskId);
     res.json(task);
   } catch (err) {
     next(err);
@@ -99,24 +56,11 @@ export async function getTaskById(req: Request, res: Response, next: NextFunctio
 
 export async function updateTask(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = getUserId(req);
-    const id = objectId.parse(req.params.id);
-    const body = updateTaskSchema.parse(req.body);
+    const taskId = requireString(req.params.taskId, "taskId");
+    const currentUserId = getCurrentUserId(req);
 
-    // ✅ Build patch without passing undefined values
-    const patch = {
-      ...(body.title !== undefined ? { title: body.title } : {}),
-      ...(body.description !== undefined ? { description: body.description } : {}),
-      ...(body.dueDate !== undefined ? { dueDate: body.dueDate } : {}),
-      ...(body.priority !== undefined ? { priority: body.priority } : {}),
-      ...(body.status !== undefined ? { status: body.status } : {}),
-      ...(body.assignedToId !== undefined ? { assignedToId: body.assignedToId } : {}),
-    };
-
-    const task = await service.updateTask(userId, id, patch);
-
-    req.app.get("io")?.emit("task:updated", task);
-    res.json(task);
+    const updated = await tasksService.updateTask(taskId, req.body, currentUserId);
+    res.json(updated);
   } catch (err) {
     next(err);
   }
@@ -124,15 +68,13 @@ export async function updateTask(req: Request, res: Response, next: NextFunction
 
 export async function assignTask(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = getUserId(req);
-    const id = objectId.parse(req.params.id);
-    const { assignedToId } = assignTaskSchema.parse(req.body);
+    const taskId = requireString(req.params.taskId, "taskId");
+    const currentUserId = getCurrentUserId(req);
 
-    // assignedToId is string | null (never undefined)
-    const task = await service.assignTask(userId, id, assignedToId);
+    const assignedToId = requireString(req.body?.assignedToId, "assignedToId");
 
-    req.app.get("io")?.emit("task:assigned", task);
-    res.json(task);
+    const updated = await tasksService.assignTask(taskId, assignedToId, currentUserId);
+    res.json(updated);
   } catch (err) {
     next(err);
   }
@@ -140,13 +82,9 @@ export async function assignTask(req: Request, res: Response, next: NextFunction
 
 export async function deleteTask(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = getUserId(req);
-    const id = objectId.parse(req.params.id);
-
-    const result = await service.deleteTask(userId, id);
-
-    req.app.get("io")?.emit("task:deleted", { id });
-    res.json(result);
+    const taskId = requireString(req.params.taskId, "taskId");
+    const out = await tasksService.deleteTask(taskId);
+    res.json(out);
   } catch (err) {
     next(err);
   }
