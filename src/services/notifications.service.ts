@@ -1,65 +1,25 @@
 import { PrismaClient, NotificationType } from "@prisma/client";
-import { emitNotificationNew } from "../modules/socket/socket.events";
+import { emitNotification } from "../socket/socket.events";
 
-export class NotificationsService {
-  constructor(private prisma: PrismaClient = new PrismaClient()) {}
+const prisma = new PrismaClient();
 
-  async createTaskAssignedNotification(params: {
-    userId: string;
-    taskId: string;
-    taskTitle: string;
-    assignedBy: string;
-  }) {
-    const notif = await this.prisma.notification.create({
-      data: {
-        userId: params.userId,
-        type: NotificationType.TASK_ASSIGNED,
-        title: "New task assigned",
-        message: `You were assigned: ${params.taskTitle}`,
-        data: {
-          taskId: params.taskId,
-          assignedBy: params.assignedBy,
-        },
-      },
-    });
+export async function createNotification(params: {
+  userId: string;
+  type: NotificationType;
+  message: string;
+  taskId?: string;
+}) {
+  const notification = await prisma.notification.create({
+    data: {
+      userId: params.userId,
+      type: params.type,
+      message: params.message,
+      taskId: params.taskId,
+    },
+  });
 
-    // real-time push
-    emitNotificationNew(params.userId, notif);
+  // 🔴 realtime + 🟢 persistent
+  emitNotification(params.userId, notification);
 
-    return notif;
-  }
-
-  async listForUser(userId: string) {
-    return this.prisma.notification.findMany({
-      where: { userId },
-      orderBy: { createdAt: "desc" },
-    });
-  }
-
-  async unreadCount(userId: string) {
-    return this.prisma.notification.count({
-      where: { userId, readAt: null },
-    });
-  }
-
-  async markRead(userId: string, notificationId: string) {
-    // ensures user can only mark their own notification
-    const updated = await this.prisma.notification.updateMany({
-      where: { id: notificationId, userId },
-      data: { readAt: new Date() },
-    });
-
-    if (updated.count === 0) {
-      throw Object.assign(new Error("Notification not found"), { status: 404 });
-    }
-    return { ok: true as const };
-  }
-
-  async markAllRead(userId: string) {
-    await this.prisma.notification.updateMany({
-      where: { userId, readAt: null },
-      data: { readAt: new Date() },
-    });
-    return { ok: true as const };
-  }
+  return notification;
 }

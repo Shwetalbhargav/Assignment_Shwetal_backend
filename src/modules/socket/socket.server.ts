@@ -8,21 +8,32 @@ import { addUserSocket, removeUserSocket } from "./socket.store";
 let io: Server | null = null;
 
 function getTokenFromHandshake(socket: AuthedSocket) {
-  // 1) Authorization: Bearer <token>
+  // 0) Preferred: socket.io-client "auth"
+  const authToken =
+    typeof socket.handshake.auth?.token === "string"
+      ? socket.handshake.auth.token
+      : undefined;
+  if (authToken) return authToken;
+
+  // 1) Authorization header
   const authHeader = socket.handshake.headers.authorization;
   if (authHeader?.startsWith("Bearer ")) return authHeader.slice(7);
 
-  // 2) Cookie: accessToken=<token> (adjust cookie name to your project)
+  // 2) Cookie: accessToken=<token>
   const rawCookie = socket.handshake.headers.cookie;
-  if (!rawCookie) return null;
-  const parsed = cookie.parse(rawCookie);
-  return parsed.accessToken ?? null;
+  if (rawCookie) {
+    const parsed = cookie.parse(rawCookie);
+    if (parsed.accessToken) return parsed.accessToken;
+  }
+
+  return null;
 }
+
 
 export function initSocket(httpServer: HttpServer) {
   io = new Server(httpServer, {
     cors: {
-      origin: true, // lock this down later (frontend URL)
+      origin: allowedOrigins, 
       credentials: true,
     },
   });

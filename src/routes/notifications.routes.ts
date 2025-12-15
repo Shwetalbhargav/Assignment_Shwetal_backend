@@ -1,20 +1,15 @@
 import { Router } from "express";
+import { requireAuth } from "../../middlewares/requireAuth";
 import {
-  listNotifications,
-  unreadCount,
-  markNotificationRead,
-  markAllRead,
-} from "../controllers/notifications.controller";
-
-// import { requireAuth } from "../middlewares/requireAuth";
+  getMyNotifications,
+  markAsRead,
+} from "./notifications.controller";
 
 const router = Router();
 
-// router.use(requireAuth);
+router.use(requireAuth); 
 
-router.get("/", listNotifications);
-router.get("/unread-count", unreadCount);
-router.patch("/:notificationId/read", markNotificationRead);
-router.patch("/read-all", markAllRead);
+router.get("/", getMyNotifications);
+router.patch("/:id/read", markAsRead);
 
 export default router;

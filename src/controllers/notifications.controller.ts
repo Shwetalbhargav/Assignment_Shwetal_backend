@@ -61,3 +61,31 @@ export async function markAllRead(req: Request, res: Response, next: NextFunctio
     next(e);
   }
 }
+
+export async function getMyNotifications(req, res) {
+  const userId = req.user.id;
+
+  const notifications = await prisma.notification.findMany({
+    where: { userId },
+    orderBy: { createdAt: "desc" },
+  });
+
+  res.json(notifications);
+}
+
+export async function markAsRead(req, res) {
+  const userId = req.user.id;
+  const { id } = req.params;
+
+  const notif = await prisma.notification.updateMany({
+    where: { id, userId },
+    data: { isRead: true },
+  });
+
+  if (notif.count === 0) {
+    return res.status(404).json({ message: "Notification not found" });
+  }
+
+  res.json({ success: true });
+}
+

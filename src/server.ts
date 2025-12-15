@@ -9,9 +9,6 @@ const server = http.createServer(app);
 initSocket(server);
 
 server.listen(PORT, () => {
-  console.log(`API listening on :${PORT}`);
+  console.log(`🚀 API + Socket listening on http://localhost:${PORT}`);
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server running at http://localhost:${PORT}`);
-});

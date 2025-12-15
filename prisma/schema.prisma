@@ -19,6 +19,7 @@ model User {
   createdTasks  Task[]         @relation("createdTasks")
   assignedTasks Task[]         @relation("assignedTasks")
   notifications Notification[]
+  auditLogs AuditLog[]
 }
 
 model Task {
@@ -37,6 +38,7 @@ model Task {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  auditLogs AuditLog[]
 }
 
 enum TaskPriority {
@@ -71,6 +73,7 @@ model Session {
 
 enum NotificationType {
   TASK_ASSIGNED
+  TASK_UPDATED
 }
 
 model Notification {
@@ -79,13 +82,45 @@ model Notification {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   type    NotificationType
-  title   String
+  
   message String?
-  data    Json?
-
-  readAt    DateTime?
+  
+  taskId    String?          @db.ObjectId
+  isRead    Boolean          @default(false)
+  
   createdAt DateTime  @default(now())
 
   @@index([userId])
-  @@index([readAt])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+enum AuditAction {
+  TASK_STATUS_CHANGED
+  TASK_PRIORITY_CHANGED
+  TASK_ASSIGNED
+}
+
+model AuditLog {
+  id        String      @id @default(auto()) @map("_id") @db.ObjectId
+
+  action    AuditAction
+
+  // who did it
+  actorId   String      @db.ObjectId
+  actor     User        @relation(fields: [actorId], references: [id])
+
+  // what it affected
+  taskId    String      @db.ObjectId
+  task      Task        @relation(fields: [taskId], references: [id])
+
+  // details
+  fromValue String?
+  toValue   String?
+
+  createdAt DateTime    @default(now())
+
+  @@index([taskId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
 }
