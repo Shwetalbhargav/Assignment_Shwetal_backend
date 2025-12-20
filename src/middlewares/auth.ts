@@ -1,26 +1,37 @@
-import type { RequestHandler } from "express";
-import jwt from "jsonwebtoken";
-import { jwtConfig } from "../config/jwt";
+import type { Request, Response, NextFunction } from "express";
+import { verifyAccessToken } from "../utils/jwt";
+import { AppError } from "../common/errors/AppError";
+import { ErrorCodes } from "../common/errors/errorCodes";
 
-export type AuthUser = { userId: string };
+export const requireAuth = (
+  req: Request,
+  _res: Response,
+  next: NextFunction
+) => {
+  const authHeader = req.headers.authorization;
 
-declare global {
-  namespace Express {
-    interface Request {
-      auth?: AuthUser;
-    }
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    throw new AppError("Unauthorized", 401, ErrorCodes.UNAUTHORIZED);
   }
-}
 
-export const requireAuth: RequestHandler = (req, res, next) => {
-  const token = req.cookies?.accessToken;
-  if (!token) return res.status(401).json({ message: "Unauthorized" });
+  const token = authHeader.split(" ")[1];
+
+  if (!token) {
+    throw new AppError("Unauthorized", 401, ErrorCodes.UNAUTHORIZED);
+  }
 
   try {
-    const payload = jwt.verify(token, jwtConfig.accessSecret) as { sub: string };
-    req.auth = { userId: payload.sub };
+    const payload = verifyAccessToken(token);
+
+    // attach user to request
+    req.user = {
+      id: payload.id,
+      email: payload.email,
+      name: payload.name,
+    };
+
     next();
   } catch {
-    return res.status(401).json({ message: "Unauthorized" });
+    throw new AppError("Invalid or expired token", 401, ErrorCodes.UNAUTHORIZED);
   }
 };

@@ -1,22 +1,41 @@
-import { getIO } from "./socket.server";
+import type { Server } from "socket.io";
 
-export const SocketEvents = {
-  TASK_UPDATED: "task:updated",
-  TASK_ASSIGNED: "task:assigned",
-  NOTIFICATION_NEW: "notification:new",
+/**
+ * We keep a single Socket.io server reference here so services can emit events
+ * without importing app/server setup code.
+ */
+let io: Server | null = null;
+
+export function setSocketServer(server: Server) {
+  io = server;
+}
+
+function getIO(): Server {
+  if (!io) {
+    throw new Error("Socket.io server not initialized. Call setSocketServer(io) during bootstrap.");
+  }
+  return io;
+}
+
+/** Recommended: rooms are user-specific so you can target a user reliably. */
+export const userRoom = (userId: string) => `user:${userId}`;
+
+// ---- Events (keep names consistent with your FE listener constants) ----
+export const SOCKET_EVENTS = {
+  TASK_UPDATED: "taskUpdated",
+  TASK_ASSIGNED: "taskAssigned",
+  NOTIFICATION: "notificationCreated",
 } as const;
 
 export function emitTaskUpdated(task: any) {
-  // simplest: broadcast to everyone
-  getIO().emit(SocketEvents.TASK_UPDATED, task);
+  getIO().emit(SOCKET_EVENTS.TASK_UPDATED, task);
 }
 
 export function emitTaskAssigned(userId: string, payload: any) {
-  // targeted: only assigned user
-  getIO().to(`user:${userId}`).emit(SocketEvents.TASK_ASSIGNED, payload);
+  getIO().to(userRoom(userId)).emit(SOCKET_EVENTS.TASK_ASSIGNED, payload);
 }
 
-export function emitNotificationNew(userId: string, payload: any) {
-  getIO().to(`user:${userId}`).emit(SocketEvents.NOTIFICATION_NEW, payload);
+/** ✅ This is the missing one */
+export function emitNotification(userId: string, notification: any) {
+  getIO().to(userRoom(userId)).emit(SOCKET_EVENTS.NOTIFICATION, notification);
 }
-

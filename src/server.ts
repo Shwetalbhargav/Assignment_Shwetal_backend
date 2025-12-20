@@ -1,14 +1,17 @@
-import "dotenv/config";
 import http from "http";
-import app from "./app.js";
-import { initSocket } from "./modules/socket/socket.server";
-
-const PORT = Number(process.env.PORT ?? 3000);
-
+import { createApp } from "./app";
+import { initSocket } from "./lib/socket";
+import dotenv from "dotenv";
+dotenv.config();
+const app = createApp();
 const server = http.createServer(app);
+
+// ---------- Socket.io ----------
 initSocket(server);
 
-server.listen(PORT, () => {
-  console.log(`🚀 API + Socket listening on http://localhost:${PORT}`);
-});
+// ---------- Start ----------
+const PORT = process.env.PORT || 4000;
 
+server.listen(PORT, () => {
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
+});

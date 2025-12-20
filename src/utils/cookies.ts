@@ -1,26 +1,23 @@
 import type { Response } from "express";
+import { COOKIE_NAMES } from "../config/constants";
+import { env } from "../config/env";
 
-export const setAuthCookies = (res: Response, accessToken: string, refreshToken: string) => {
-  const secure = (process.env.COOKIE_SECURE ?? "false") === "true";
+const isProd = env.NODE_ENV === "production";
 
-  res.cookie("accessToken", accessToken, {
+export const setAuthCookie = (res: Response, token: string) => {
+  res.cookie(COOKIE_NAMES.ACCESS_TOKEN, token, {
     httpOnly: true,
-    secure,
-    sameSite: "lax",
-    path: "/",
-    maxAge: 15 * 60 * 1000,
-  });
-
-  res.cookie("refreshToken", refreshToken, {
-    httpOnly: true,
-    secure,
-    sameSite: "lax",
-    path: "/",
-    maxAge: 7 * 24 * 60 * 60 * 1000,
+    secure: isProd,
+    sameSite: isProd ? "none" : "lax",
+    // If you deploy FE+BE on different domains, "none" is required in prod
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
   });
 };
 
-export const clearAuthCookies = (res: Response) => {
-  res.clearCookie("accessToken", { path: "/" });
-  res.clearCookie("refreshToken", { path: "/" });
+export const clearAuthCookie = (res: Response) => {
+  res.clearCookie(COOKIE_NAMES.ACCESS_TOKEN, {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? "none" : "lax",
+  });
 };
